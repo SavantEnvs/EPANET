@@ -1,0 +1,39 @@
+project: savantenvs/epanet
+target: runepanet
+testsuite:
+  - https://$MAYHEM_DOMAIN/$MAYHEM_PROJECT/$MAYHEM_TARGET/testsuite.tar
+  - file://mayhem/runepanet/testsuite
+
+cmds:
+  - cmd: /mayhem/runepanet @@ /tmp/report.rpt
+    filepath: /input.inp
+    # ASan-instrumented raw file CLI: mayhem-fuzz needs the compatibility runner (rc-254
+    # restart loop under the default snapshot runner with sanitizer shadow mappings).
+    #
+    # Fix over the previous attempt (which still failed in the cloud with "target times
+    # out on every test case ... and on the default test case", identical to the
+    # pre-harness-fix symptom, despite the harness's own 5s SIGALRM cap and
+    # locally-confirmed ~23ms per-exec cost including full process startup):
+    #
+    # `timeout:` was MISSING here. Mayhem's own auto-resolution log (see
+    # docs/netnew-worker-prompt.md "PIN what auto-resolution discovers") prescribes
+    # `cmd.timeout` and `cmd.env.MFUZZ_COMPAT_LEVEL` as a PAIR for this runner; shipping
+    # only the env var left Mayhem's own per-exec supervisor timeout at an unstated
+    # (evidently very short) default that fired before the harness's 5s alarm ever got a
+    # chance -- so EVERY exec, including the trivial default seed, was killed by Mayhem's
+    # OWN timeout, not the harness's. Pinned to 30s (6x headroom over the 5s alarm),
+    # matching the known-green MFUZZ_COMPAT_LEVEL='2' shape.
+    #
+    # `filepath:` also moved off /tmp (was /tmp/input.inp) to match the known-green
+    # shape for Mayhem's OWN input-staging mechanism (armips -> /input.asm, pawncc ->
+    # /test.p) and to stop it sharing a tmpfs with the app's own report output. NOTE:
+    # the report-output arg stays under /tmp deliberately -- unlike `filepath:` (staged
+    # by Mayhem before the target runs), this path is opened directly by the target
+    # process itself, which runs as the unprivileged `mayhem` (uid 2000) user; root `/`
+    # is NOT writable to that user (confirmed: `docker run ... touch /x` ->
+    # "Permission denied", while /tmp and /mayhem are writable), so pointing this at
+    # `/report.rpt` breaks EVERY execution with "Error 303: cannot open report file"
+    # (confirmed by a real `docker run` against the built image before this fix).
+    timeout: 30
+    env:
+      MFUZZ_COMPAT_LEVEL: "2"
