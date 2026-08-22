@@ -1,0 +1,22 @@
+project: savantenvs/epanet
+target: runepanet
+testsuite:
+  - https://$MAYHEM_DOMAIN/$MAYHEM_PROJECT/$MAYHEM_TARGET/testsuite.tar
+  - file://mayhem/runepanet/testsuite
+
+cmds:
+  - cmd: /mayhem/runepanet @@ /tmp/report.rpt
+    filepath: /input.inp
+    # ASan-instrumented raw file CLI: mayhem-fuzz needs the compatibility runner (rc-254
+    # restart loop under the default snapshot runner with sanitizer shadow mappings).
+    #
+    # `timeout:` is Mayhem's per-exec bound (the harness has no timer of its own); it is paired
+    # with `cmd.env.MFUZZ_COMPAT_LEVEL` for this runner. A mutated [TIMES] Duration can make a
+    # simulation run long; that is left to this timeout, not guarded in the harness.
+    #
+    # `filepath:` is /input.inp (not /tmp) so Mayhem's input staging does not share a tmpfs with
+    # the report output. The report path stays under /tmp: the target runs as the unprivileged
+    # `mayhem` user, for whom root `/` is not writable ("Error 303: cannot open report file").
+    timeout: 30
+    env:
+      MFUZZ_COMPAT_LEVEL: "2"
