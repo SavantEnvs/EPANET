@@ -1,0 +1,6 @@
+project: savantenvs/epanet
+target: cstr-isvalid
+
+cmds:
+  - cmd: /mayhem/fuzz_cstr_isvalid
+    libfuzzer: true
